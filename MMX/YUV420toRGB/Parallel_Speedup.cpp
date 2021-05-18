@@ -93,9 +93,11 @@ int YUV420_RGB32_mmx(uint32_t* rgb, int width, int height, uint8_t* y, uint8_t* 
 
 const char* inPath = "akiyo_cif.yuv";
 const char* outPath = "miss_out.cif";
+const char* outRGBPath = "rgba.txt";
+//https://gist.github.com/muiz6/51139825c7d38aa58b03034ed997a1aa
 int main()
 {
-    //init_coefficients();
+    init_coefficients();
     fstream f;
     f.open(inPath, ios::in | ios::binary);
     if (!f.is_open())
@@ -111,14 +113,20 @@ int main()
     f.close();
 
     char* outBuffer = new char[size];
-    int width = 352, height = 288, inFrameSize = width * height * 3 / 2;
+    int width = 352, height = 288, inFrameSize = width * height * 3 / 2, UFrameSize = width* height * 1.25;
+    char* outRGBBuffer = new char[width*height*4];
     int frameNum = size / inFrameSize;
 
     //keep Y, make U,V as 128
-    for (int i = 0; i < frameNum; ++i)
-        for (int j = 0; j < inFrameSize; ++j)
+    for (int i = 0; i < frameNum; ++i) {
+        for (int j = 0; j < inFrameSize; ++j) {
             outBuffer[i * inFrameSize + j] = j < width* height ? inBuffer[i * inFrameSize + j] : 128;
-
+            YUV420_RGB32_mmx((uint32_t*)outRGBBuffer, width, height, (uint8_t*)&outRGBBuffer[i * inFrameSize], (uint8_t*)&outRGBBuffer[i * inFrameSize + width * height], (uint8_t*)&outRGBBuffer[i * inFrameSize + UFrameSize]);
+            ofstream out(outRGBPath, ios::binary);
+            out.write(outRGBBuffer, width*height*4);
+            out.close();
+        }
+    }
     ofstream out(outPath, ios::binary);
     out.write(outBuffer, size);
     out.close();
