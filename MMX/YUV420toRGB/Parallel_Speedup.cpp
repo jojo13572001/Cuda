@@ -1,9 +1,13 @@
 // Parallel_Speedup.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 
+#include <Windows.h>
 #include <iostream>
 #include <fstream>
 #include <assert.h>
+#include <GdiPlus.h>
+using namespace Gdiplus;
+#pragma comment(lib, "Gdiplus.lib")
 
 using namespace std;
 
@@ -91,13 +95,43 @@ int YUV420_RGB32_mmx(uint32_t* rgb, int width, int height, uint8_t* y, uint8_t* 
     }
 }
 
+int GetEncoderClsid(const wchar_t* format, CLSID* pClsid)
+{
+    unsigned int  num = 0;          // number of image encoders
+    unsigned int  size = 0;         // size of the image encoder array in bytes
+
+    ImageCodecInfo* pImageCodecInfo = NULL;
+
+    Gdiplus::GetImageEncodersSize(&num, &size);
+    if (size == 0)
+        return -1;  // Failure
+
+    pImageCodecInfo = (ImageCodecInfo*)(malloc(size));
+    if (pImageCodecInfo == NULL)
+        return -1;  // Failure
+
+    Gdiplus::GetImageEncoders(num, size, pImageCodecInfo);
+
+    for (unsigned int j = 0; j < num; ++j)
+    {
+        if (wcscmp(pImageCodecInfo[j].MimeType, format) == 0)
+        {
+            *pClsid = pImageCodecInfo[j].Clsid;
+            free(pImageCodecInfo);
+            return j;  // Success
+        }
+    }
+
+    free(pImageCodecInfo);
+    return -1;  // Failure
+}
+
 const char* inPath = "akiyo_cif.yuv";
 const char* outPath = "miss_out.cif";
 const char* outRGBPath = "rgba.txt";
 //https://gist.github.com/muiz6/51139825c7d38aa58b03034ed997a1aa
 int main()
 {
-    init_coefficients();
     fstream f;
     f.open(inPath, ios::in | ios::binary);
     if (!f.is_open())
@@ -113,20 +147,32 @@ int main()
     f.close();
 
     char* outBuffer = new char[size];
-    int width = 352, height = 288, inFrameSize = width * height * 3 / 2, UFrameSize = width* height * 1.25;
+    int width = 352, height = 288, inFrameSize = width * height * 3 / 2, YFrameSize = width*height, UFrameSize = width* height * 5 / 4;
     char* outRGBBuffer = new char[width*height*4];
     int frameNum = size / inFrameSize;
 
+    //gdiplus draw image
+    GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR           gdiplusToken;
+
+    // Initialize GDI+.
+    GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+    CLSID pngClsid;
+    GetEncoderClsid(L"image/bmp", &pngClsid);
     //keep Y, make U,V as 128
     for (int i = 0; i < frameNum; ++i) {
-        for (int j = 0; j < inFrameSize; ++j) {
-            outBuffer[i * inFrameSize + j] = j < width* height ? inBuffer[i * inFrameSize + j] : 128;
-            YUV420_RGB32_mmx((uint32_t*)outRGBBuffer, width, height, (uint8_t*)&outRGBBuffer[i * inFrameSize], (uint8_t*)&outRGBBuffer[i * inFrameSize + width * height], (uint8_t*)&outRGBBuffer[i * inFrameSize + UFrameSize]);
+        //for (int j = 0; j < inFrameSize; ++j) {
+            //outBuffer[i * inFrameSize + j] = j < width* height ? inBuffer[i * inFrameSize + j] : 128;
+            init_coefficients();
+            YUV420_RGB32_mmx((uint32_t*)outRGBBuffer, width, height, (uint8_t*)&inBuffer[i * inFrameSize], (uint8_t*)&inBuffer[i * inFrameSize + YFrameSize], (uint8_t*)&inBuffer[i * inFrameSize + UFrameSize]);
             ofstream out(outRGBPath, ios::binary);
             out.write(outRGBBuffer, width*height*4);
             out.close();
-        }
+        //}
+        Bitmap bmp(width, height, 4 * width, PixelFormat32bppARGB, (BYTE*)outRGBBuffer);
+        bmp.Save(L"test.bmp", &pngClsid);
     }
+
     ofstream out(outPath, ios::binary);
     out.write(outBuffer, size);
     out.close();
