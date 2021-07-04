@@ -165,10 +165,19 @@ int main()
             //outBuffer[i * inFrameSize + j] = j < width* height ? inBuffer[i * inFrameSize + j] : 128;
             init_coefficients();
             YUV420_RGB32_mmx((uint32_t*)outRGBBuffer, width, height, (uint8_t*)&inBuffer[i * inFrameSize], (uint8_t*)&inBuffer[i * inFrameSize + YFrameSize], (uint8_t*)&inBuffer[i * inFrameSize + UFrameSize]);
-            ofstream out(outRGBPath, ios::binary);
-            out.write(outRGBBuffer, width*height*4);
-            out.close();
+            //ofstream out(outRGBPath, ios::binary);
+            //out.write(outRGBBuffer, width*height*4);
+            //out.close();
         //}
+        int offset = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                uint32_t temp = outRGBBuffer[offset];
+                outRGBBuffer[offset] = outRGBBuffer[offset + 2];
+                outRGBBuffer[offset + 2] = temp;
+                offset += 4;
+            }
+        }
         Bitmap bmp(width, height, 4 * width, PixelFormat32bppARGB, (BYTE*)outRGBBuffer);
         bmp.Save(L"test.bmp", &pngClsid);
     }
